@@ -1,0 +1,41 @@
+# File: C:\Users\Sagni\Desktop\immunization_app\Home.py
+import streamlit as st
+import pandas as pd
+
+st.set_page_config(
+    page_title="Home",
+    layout="centered",
+    initial_sidebar_state="auto"
+)
+
+st.title("🏡 Home: Data Upload")
+
+st.markdown("""
+Welcome to the Vaccine Utilization Dashboard.
+
+Please upload your immunization data file below. The data will be available for all pages.
+""")
+
+uploaded_file = st.file_uploader(
+    "Choose a CSV or Excel file",
+    type=["csv", "xlsx"]
+)
+
+if uploaded_file is not None:
+    try:
+        if uploaded_file.name.endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+        
+        # Store the raw DataFrame in session state
+        st.session_state["immunization_data"] = df
+        st.success("✅ Data uploaded successfully! Please navigate to the dashboard page.")
+        
+        with st.expander("Preview of the uploaded data"):
+            st.dataframe(df.head())
+
+    except Exception as e:
+        st.error(f"❌ An error occurred while reading the file: {e}")
+else:
+    st.info("Awaiting file upload...")

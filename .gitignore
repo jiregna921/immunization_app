@@ -1,0 +1,17 @@
+__pycache__/ 
+*.pyc 
+.DS_Store 
+.env 
+.venv/ 
+env/ 
+venv/ 
+.ipynb_checkpoints/ 
+data/ 
+output/ 
+*.sqlite3 
+.idea/ 
+.vscode/ 
+*.log 
+.pytest_cache/ 
+.streamlit/ 
+*.db 

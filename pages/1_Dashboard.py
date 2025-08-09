@@ -1,39 +1,85 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(
     page_title="Utilization Dashboard", 
     layout="wide",
-    page_icon="💉" # Sets the icon for the browser tab
+    page_icon="💉"
 )
 
-# --- Add a logo to the main page ---
-# The logo is in the 'logo' folder relative to the app's root directory.
-# Replace 'logo.png' with your actual logo file name.
-st.image("logo/logo.png", width=100)
+# The custom CSS for the dark theme has been removed to revert to the default Streamlit styling.
 
 st.title("📊 Vaccine Utilization Dashboard")
 
+# --- Correcting the No Dataset Found error with a dummy dataset ---
 if "immunization_data" not in st.session_state:
-    st.error("❌ No dataset found. Please upload a file on the Home page.")
-    st.stop()
+    st.info("No dataset found. A sample dataset has been loaded for demonstration.")
+    # Creating a dummy dataset to allow the dashboard to run without an uploaded file
+    dummy_data = {
+        "Period": ["2023-Q4", "2023-Q4", "2023-Q4", "2023-Q4", "2023-Q4", "2023-Q4"],
+        "Region": ["Region A", "Region A", "Region B", "Region B", "Region C", "Region C"],
+        "Zone": ["Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5", "Zone 6"],
+        "Woreda": ["Woreda A1", "Woreda A2", "Woreda B1", "Woreda B2", "Woreda C1", "Woreda C2"],
+        "BCG Distrib": [1000, 1500, 2000, 1200, 800, 1800],
+        "BCG Admin": [800, 1400, 1800, 500, 750, 1700],
+        "IPV Distrib": [500, 800, 1000, 600, 400, 900],
+        "IPV Admin": [480, 750, 950, 300, 380, 850],
+        "Measles Distrib": [1200, 1000, 1500, 800, 600, 1100],
+        "Measles Admin": [700, 950, 1400, 500, 550, 1050],
+        "Penta Distrib": [900, 1100, 1300, 700, 500, 1000],
+        "Penta Admin": [850, 1050, 1250, 650, 450, 980],
+        "Rota Distrib": [700, 900, 1200, 500, 300, 800],
+        "Rota Admin": [650, 800, 1100, 450, 280, 750],
+    }
+    st.session_state["immunization_data"] = pd.DataFrame(dummy_data)
 
-# --- Custom Utilization Categorization based on the provided image
+
+# --- Threshold configuration for each vaccine ---
+VACCINE_THRESHOLDS = {
+    "BCG": {
+        "unacceptable": 100,  # >100%
+        "acceptable": 50,     # >50% to 100%
+    },
+    "IPV": {
+        "unacceptable": 100,  # >100%
+        "acceptable": 90,     # >90% to 100%
+    },
+    "Measles": {
+        "unacceptable": 100,
+        "acceptable": 65,
+    },
+    "Penta": {
+        "unacceptable": 100,
+        "acceptable": 95,
+    },
+    "Rota": {
+        "unacceptable": 100,
+        "acceptable": 90,
+    },
+    # Add a default for any other vaccines not listed
+    "Default": {
+        "unacceptable": 100,
+        "acceptable": 65, # Using 65 as a default threshold
+    }
+}
+
 def categorize_utilization(row):
     """
-    Categorizes the utilization rate based on the thresholds provided in the image.
-    Low Utilization: <65%
-    Acceptable: 65% - 100%
-    Unacceptable: >100%
+    Categorizes the utilization rate based on the vaccine-specific thresholds.
     """
     rate = row["Utilization Rate"]
-    if rate > 100:
-        return "Unacceptable (>100%)"
-    elif 65 <= rate <= 100:
-        return "Acceptable (65–100%)"
+    antigen = row["Antigen"]
+    
+    thresholds = VACCINE_THRESHOLDS.get(antigen, VACCINE_THRESHOLDS["Default"])
+
+    if rate > thresholds["unacceptable"]:
+        return "Unacceptable"
+    elif rate >= thresholds["acceptable"]:
+        return "Acceptable"
     else:
-        return "Low Utilization (<65%)"
+        return "Low Utilization"
 
 # --- Cached Data Processing (Rewritten for your wide data format) ---
 @st.cache_data
@@ -79,9 +125,9 @@ def prepare_data(data):
     df_pivot["Distributed"] = pd.to_numeric(df_pivot["Distributed"], errors="coerce").fillna(0)
     df_pivot["Administered"] = pd.to_numeric(df_pivot["Administered"], errors="coerce").fillna(0)
     
-    # Calculate Utilization Rate and Category
+    # Calculate Utilization Rate and Category, rounded to 0 decimal places
     df_pivot["Utilization Rate"] = df_pivot.apply(
-        lambda row: round((row["Administered"] / row["Distributed"] * 100), 2) if row["Distributed"] > 0 else 0,
+        lambda row: round((row["Administered"] / row["Distributed"] * 100), 0) if row["Distributed"] > 0 else 0,
         axis=1
     )
     df_pivot["Utilization Category"] = df_pivot.apply(categorize_utilization, axis=1)
@@ -129,7 +175,7 @@ if filtered_df.empty:
 total_distributed = filtered_df["Distributed"].sum()
 total_administered = filtered_df["Administered"].sum()
 overall_utilization_rate = round(
-    (total_administered / total_distributed * 100) if total_distributed > 0 else 0, 2
+    (total_administered / total_distributed * 100) if total_distributed > 0 else 0, 0
 )
 
 st.markdown("---")
@@ -139,57 +185,122 @@ with col1:
 with col2:
     st.metric(label="Total Vaccines Administered", value=f"{total_administered:,.0f}")
 with col3:
-    st.metric(label="Overall Utilization Rate", value=f"{overall_utilization_rate:.2f}%")
+    st.metric(label="Overall Utilization Rate", value=f"{overall_utilization_rate:.0f}%")
 st.markdown("---")
 
+# --- Displaying Woreda Counts by Category ---
+total_woredas = len(filtered_df["Woreda"].unique())
+category_counts = filtered_df["Utilization Category"].value_counts()
+
+st.subheader("Woreda Counts by Utilization Category")
+col_woredas1, col_woredas2, col_woredas3, col_woredas4 = st.columns(4)
+
+with col_woredas1:
+    st.metric(label="Total Woredas", value=f"{total_woredas:,.0f}")
+with col_woredas2:
+    st.metric(label="Acceptable", value=f"{category_counts.get('Acceptable', 0):,.0f}")
+with col_woredas3:
+    st.metric(label="Unacceptable", value=f"{category_counts.get('Unacceptable', 0):,.0f}")
+with col_woredas4:
+    st.metric(label="Low Utilization", value=f"{category_counts.get('Low Utilization', 0):,.0f}")
+st.markdown("---")
+
+
 # --- Summary and Visualization Data Preparation ---
-category_counts = filtered_df["Utilization Category"].value_counts().reset_index()
-category_counts.columns = ["Category", "Count"]
+# Data for the pie chart
+category_counts_pie = filtered_df["Utilization Category"].value_counts().reset_index()
+category_counts_pie.columns = ["Category", "Count"]
 
-total_count = category_counts["Count"].sum()
-if total_count > 0:
-    category_counts["Percentage"] = (100 * category_counts["Count"] / total_count).round(2)
+# Data for the 100% stacked bar chart, dynamically grouped by Region or Zone
+if selected_region == "All":
+    groupby_col = "Region"
 else:
-    category_counts["Percentage"] = 0
+    groupby_col = "Zone"
 
-# --- Color Mapping (Updated to match the image) ---
+# Group by the selected column and Utilization Category, then calculate counts
+stacked_bar_data = filtered_df.groupby([groupby_col, "Utilization Category"]).size().reset_index(name='Count')
+
+# Calculate the total count per group (Region or Zone)
+total_by_group = stacked_bar_data.groupby(groupby_col)["Count"].sum().reset_index(name='Total')
+
+# Merge the total counts back to the stacked_bar_data
+stacked_bar_data = stacked_bar_data.merge(total_by_group, on=groupby_col)
+
+# Calculate the percentage for each category within each group
+stacked_bar_data["Percentage"] = (stacked_bar_data["Count"] / stacked_bar_data["Total"] * 100).round(0)
+
+# --- Color Mapping ---
 color_map = {
-    "Unacceptable (>100%)": "blue",
-    "Acceptable (65–100%)": "#008B8B", # Dark Cyan (A nice teal)
-    "Low Utilization (<65%)": "red" # Changed from a lighter red to a full red
+    "Acceptable": "green", 
+    "Unacceptable": "blue",
+    "Low Utilization": "red"
 }
 
-col_chart1, col_chart2 = st.columns(2)
+# Adjust column widths for better layout
+col_chart1, col_chart2 = st.columns([2, 1])
 
 with col_chart1:
-    st.subheader(f"Utilization Category Distribution ({selected_antigen})")
-    bar_fig = px.bar(
-        category_counts,
-        x="Category",
-        y="Count",
-        color="Category",
-        text="Percentage",
-        color_discrete_map=color_map,
-        title=f"Vaccine Utilization Categories - {selected_antigen} ({selected_period})",
+    st.subheader(f"Utilization Breakdown by {'Region' if selected_region == 'All' else 'Zone'} ({selected_antigen})")
+    
+    # Corrected approach using plotly.graph_objects for explicit stacking
+    bar_fig = go.Figure()
+    
+    # Define the order of categories for stacking
+    categories = ["Acceptable", "Low Utilization", "Unacceptable"]
+    
+    for category in categories:
+        filtered_data = stacked_bar_data[stacked_bar_data["Utilization Category"] == category]
+        bar_fig.add_trace(go.Bar(
+            x=filtered_data[groupby_col],
+            y=filtered_data["Percentage"],
+            name=category,
+            marker_color=color_map[category],
+            text=filtered_data["Percentage"],
+            textposition='inside',
+            insidetextanchor='middle',
+            texttemplate='%{y:.0f}%',
+            hovertemplate=f"<b>%{{x}}</b><br>{category}: %{{y:.0f}}%<br>District Count: %{{customdata}}<extra></extra>",
+            customdata=filtered_data['Count']
+        ))
+    
+    bar_fig.update_layout(
+        barmode="stack",
+        yaxis=dict(
+            title="Percentage (%)",
+            range=[0, 100],
+            tickformat=".0f"
+        ),
+        xaxis=dict(
+            title=groupby_col,
+            tickangle=-45
+        ),
+        title=f"100% Stacked Utilization by {'Region' if selected_region == 'All' else 'Zone'} - {selected_antigen} ({selected_period})",
+        legend_title_text="Utilization Category",
+        bargap=0.2,
+        showlegend=True
     )
-    bar_fig.update_traces(texttemplate='%{text:.2s}%', textposition="outside", 
-                           textfont_color=['white' if cat == 'Low Utilization (<65%)' else 'black' for cat in category_counts['Category']])
-    bar_fig.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
+
     st.plotly_chart(bar_fig, use_container_width=True)
 
 with col_chart2:
-    st.subheader("Utilization Category Breakdown")
+    st.subheader("Overall Utilization Breakdown")
     pie_fig = px.pie(
-        category_counts,
+        category_counts_pie,
         values="Count",
         names="Category",
-        title="Utilization Category Distribution",
+        title="Overall Utilization Distribution",
         hole=0.4,
         color="Category",
         color_discrete_map=color_map,
     )
-    # Set text color to white for better contrast
-    pie_fig.update_traces(textfont_color="white")
+    # Reverting chart colors to default
+    pie_fig.update_traces(textfont_color="black") # Assuming black text on white background is readable
+    pie_fig.update_layout(
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        title_font=dict(size=18, color='black'),
+        font=dict(color='black')
+    )
     st.plotly_chart(pie_fig, use_container_width=True)
 
 st.markdown("---")
