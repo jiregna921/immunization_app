@@ -1,3 +1,6 @@
+streamlit
+pandas
+plotly
 absl-py==2.3.0
 aiobotocore @ file:///C:/b/abs_a0zxrsvpwx/croot/aiobotocore_1714464454692/work
 aiohappyeyeballs @ file:///C:/b/abs_b505trsapr/croot/aiohappyeyeballs_1725434036096/work
