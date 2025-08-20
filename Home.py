@@ -1,352 +1,475 @@
-# File: C:\Users\Sagni\Desktop\immunization_app\Home.py
 import streamlit as st
 import pandas as pd
-import numpy as np
-from difflib import SequenceMatcher
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
-# --- Custom CSS for improved styling (copied from Dashboard.py) ---
-st.markdown("""
-<style>
-/* Overall page layout and styling */
-.stApp {
-    padding-top: 1rem;
-    background-color: #F0F2F6; /* Light gray background for better visibility */
-}
+# --- Configuration File for Authentication (config.yaml) ---
+# Create this file in your project directory.
+# This code assumes you have a config.yaml file.
+# To generate hashed passwords, run:
+# import streamlit_authenticator as stauth
+# hashed_passwords = stauth.hasher(['your_password']).generate()
+# print(hashed_passwords)
+#
+#
+# --- config.yaml content example ---
+# cookie:
+#   expiry_days: 30
+#   key: "your_random_cookie_key"
+#   name: "your_app_name_cookie"
+# credentials:
+#   usernames:
+#     testuser:
+#       email: "testuser@example.com"
+#       name: "Test User"
+#       password: "$2b$12$RjVwZ/..." # Your hashed password here
 
-/* Header styling */
-.main-header-container {
-    background-color: #004643;
-    padding: 1rem;
-    border-radius: 10px;
-    margin-bottom: 2rem;
-}
+# --- USER AUTHENTICATION ---
+with open('config.yaml') as file:
+    config = yaml.load(file, Loader=SafeLoader)
 
-.main-header-container h1 {
-    color: white;
-    margin: 0;
-    text-align: center;
-    font-size: 2.5rem;
-}
-
-/* Metric styling (not used here but kept for consistency) */
-.metric-container {
-    background-color: #E6F7FF;
-    border: 1px solid #cceeff;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-}
-
-.metric-title {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #004643;
-    margin-bottom: 0.5rem;
-}
-
-.metric-value {
-    font-size: 2rem;
-    font-weight: bold;
-    color: #007bff;
-}
-
-/* Spacing and layout for metrics */
-.st-emotion-cache-1kyx5v0 {
-    gap: 0.5rem;
-}
-
-.st-emotion-cache-1f19s7 {
-    padding-top: 0;
-}
-
-/* Custom styling for the file uploader and text */
-.stMarkdown p {
-    font-size: 1.1rem;
-    color: #333;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# Set the page configuration for the main page
-st.set_page_config(
-    page_title="Home - Data Triangulation",
-    layout="centered",
-    initial_sidebar_state="expanded",
-    page_icon="🏠"
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
 )
 
-# Custom styled title at the top
-st.markdown(
-    f"""
-    <div class="main-header-container">
-        <h1>🏠 Data Triangulation and Preparation App</h1>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+name, authentication_status, username = authenticator.login('Login', 'main')
 
-st.markdown("This application helps you combine two separate datasets (Distributed and Administered) into a single, clean file for analysis.")
-st.markdown("---")
+# --- Main App Logic (executed only after successful login) ---
+if authentication_status:
+    authenticator.logout('Logout', 'main')
 
-# --- Fuzzy Matching Helper Function ---
-def fuzzy_match_and_map(df_to_map, df_target, key_col_to_map, key_col_target, threshold):
-    """
-    Finds the best fuzzy match for each entry in a column of df_to_map
-    within a column of df_target and creates a mapping dictionary.
-    Returns a dictionary of mappings and a list of unmatched items.
-    """
-    st.info(f"Finding best matches for '{key_col_to_map}' in '{key_col_target}' with a threshold of {threshold}%.")
+    # --- Custom CSS for improved styling ---
+    st.markdown("""
+    <style>
+    /* Overall page layout and styling */
+    .stApp {
+        padding-top: 1rem;
+        background-color: #F0F2F6; /* Light gray background for better visibility */
+    }
+
+    /* Header styling - now with reduced font size */
+    .main-header-container {
+        background-color: #004643;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 0.25rem; /* Reduced from 0.5rem to 0.25rem for more compact layout */
+    }
+
+    .main-header-container h1 {
+        color: white;
+        margin: 0;
+        text-align: center;
+        font-size: 1.5rem; /* Reduced from 2.5rem to 1.5rem */
+    }
+
+    /* Custom metric styling, using title's color theme */
+    .custom-metric-box {
+        background-color: #004643;
+        padding: 1rem;
+        border-radius: 10px;
+        text-align: center;
+        margin-bottom: 1rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .custom-metric-label {
+        font-size: 1rem; /* Reduced size */
+        font-weight: bold;
+        color: white;
+        margin-bottom: 0.25rem;
+    }
+
+    .custom-metric-value {
+        font-size: 1.5rem; /* Reduced size */
+        font-weight: bold;
+        color: white;
+    }
+
+    /* Spacing and layout for Streamlit's native components */
+    .st-emotion-cache-1kyx5v0 {
+        gap: 0.5rem;
+    }
+
+    .st-emotion-cache-1f19s7 {
+        padding-top: 0;
+    }
+
+    /* Custom styling for text content */
+    .stMarkdown p {
+        font-size: 1.1rem;
+        color: #333;
+    }
+
+    /* Custom table styling to match pie chart height */
+    .custom-table-container {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .custom-table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+
+    .custom-table th, .custom-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+
+    .custom-table th {
+        background-color: #004643;
+        color: white;
+        font-size: 1.2rem;
+    }
+
+    .custom-table td {
+        font-size: 1.2rem;
+    }
+
+    .custom-table tr:nth-child(even) {
+        background-color: #f2f2f2;
+    }
+
+    .custom-table tr:hover {
+        background-color: #ddd;
+    }
+
+    .custom-table .total-row {
+        font-weight: bold;
+        background-color: #005f5a;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.set_page_config(
+        page_title="Utilization Dashboard",
+        layout="wide",
+        page_icon="💉"
+    )
+
+    # Custom styled title at the top with a logo
+    col_logo, col_title = st.columns([1, 4])
+    with col_logo:
+        st.image("logo.png", width=100)
+
+    with col_title:
+        st.markdown(
+            f"""
+            <div class="main-header-container">
+                <h1>📊 Vaccine Utilization Dashboard</h1>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # --- Correcting the No Dataset Found error with a dummy dataset ---
+    if "immunization_data" not in st.session_state:
+        st.info("No dataset found. A sample dataset has been loaded for demonstration.")
+        # Creating a dummy dataset to allow the dashboard to run without an uploaded file
+        dummy_data = {
+            "Period": ["2023-Q4", "2023-Q4", "2023-Q4", "2023-Q4", "2023-Q4", "2023-Q4"],
+            "Region": ["Region A", "Region A", "Region B", "Region B", "Region C", "Region C"],
+            "Zone": ["Zone 1", "Zone 2", "Zone 3", "Zone 4", "Zone 5", "Zone 6"],
+            "Woreda": ["Woreda A1", "Woreda A2", "Woreda B1", "Woreda B2", "Woreda C1", "Woreda C2"],
+            "BCG Distrib": [1000, 1500, 2000, 1200, 800, 1800],
+            "BCG Admin": [800, 1400, 1800, 500, 750, 1700],
+            "IPV Distrib": [500, 800, 1000, 600, 400, 900],
+            "IPV Admin": [480, 750, 950, 300, 380, 850],
+            "Measles Distrib": [1200, 1000, 1500, 800, 600, 1100],
+            "Measles Admin": [700, 950, 1400, 500, 550, 1050],
+            "Penta Distrib": [900, 1100, 1300, 700, 500, 1000],
+            "Penta Admin": [850, 1050, 1250, 650, 450, 980],
+            "Rota Distrib": [700, 900, 1200, 500, 300, 800],
+            "Rota Admin": [650, 800, 1100, 450, 280, 750],
+        }
+        st.session_state["immunization_data"] = pd.DataFrame(dummy_data)
+
+    # --- Threshold configuration for each vaccine ---
+    VACCINE_THRESHOLDS = {
+        "BCG": {
+            "unacceptable": 100,
+            "acceptable": 50,
+        },
+        "IPV": {
+            "unacceptable": 100,
+            "acceptable": 90,
+        },
+        "Measles": {
+            "unacceptable": 100,
+            "acceptable": 65,
+        },
+        "Penta": {
+            "unacceptable": 100,
+            "acceptable": 95,
+        },
+        "Rota": {
+            "unacceptable": 100,
+            "acceptable": 90,
+        },
+        "Default": {
+            "unacceptable": 100,
+            "acceptable": 65,
+        }
+    }
+
+    def categorize_utilization(row):
+        rate = row["Utilization Rate"]
+        antigen = row["Antigen"]
+        
+        thresholds = VACCINE_THRESHOLDS.get(antigen, VACCINE_THRESHOLDS["Default"])
+
+        if rate > thresholds["unacceptable"]:
+            return "Unacceptable"
+        elif rate >= thresholds["acceptable"]:
+            return "Acceptable"
+        else:
+            return "Low Utilization"
+
+    @st.cache_data
+    def prepare_data(data):
+        data_processed = data.copy()
+        
+        distrib_cols = [col for col in data_processed.columns if 'Distrib' in str(col)]
+        admin_cols = [col for col in data_processed.columns if 'Admin' in str(col)]
+        antigens = [col.replace(' Distrib', '') for col in distrib_cols]
+
+        all_antigen_cols = distrib_cols + admin_cols
+        id_vars = [col for col in data_processed.columns if col not in all_antigen_cols]
+
+        df_long = pd.melt(data_processed,
+                          id_vars=id_vars,
+                          value_vars=all_antigen_cols,
+                          var_name='AntigenType',
+                          value_name='Count')
+
+        df_long['Antigen'] = df_long['AntigenType'].apply(lambda x: x.split(' ')[0])
+        df_long['Type'] = df_long['AntigenType'].apply(lambda x: 'Distributed' if 'Distrib' in x else 'Administered')
+        
+        df_pivot = df_long.pivot_table(index=id_vars + ['Antigen'],
+                                       columns='Type',
+                                       values='Count').reset_index()
+        
+        df_pivot.columns.name = None
+        df_pivot = df_pivot.rename(columns={'Distributed': 'Distributed', 'Administered': 'Administered'})
+        df_pivot["Distributed"] = pd.to_numeric(df_pivot["Distributed"], errors="coerce").fillna(0)
+        df_pivot["Administered"] = pd.to_numeric(df_pivot["Administered"], errors="coerce").fillna(0)
+        
+        df_pivot["Utilization Rate"] = df_pivot.apply(
+            lambda row: round((row["Administered"] / row["Distributed"] * 100), 0) if row["Distributed"] > 0 else 0,
+            axis=1
+        )
+        df_pivot["Utilization Category"] = df_pivot.apply(categorize_utilization, axis=1)
+        
+        return df_pivot
+
+    df = prepare_data(st.session_state["immunization_data"].copy())
+
+    # --- Sidebar Filters (using standardized column names) ---
+    st.sidebar.header("🧪 Filter Data")
+
+    available_periods = sorted(df["Period"].unique().tolist(), reverse=True)
+    available_regions = sorted(df["Region"].dropna().unique().tolist())
+    available_antigens = sorted(df["Antigen"].dropna().unique().tolist())
+
+    selected_period = st.sidebar.selectbox("Select Period", available_periods)
+
+    with st.sidebar.expander("Select Regions"):
+        all_regions_selected = st.checkbox("All Regions", value=True, key="all_regions")
+        selected_regions = []
+        if not all_regions_selected:
+            selected_regions = [region for region in available_regions if st.checkbox(region, value=False, key=f"region_{region}")]
+        else:
+            selected_regions = available_regions
+        if not selected_regions:
+            selected_regions = available_regions
+
+    available_zones = sorted(df[df["Region"].isin(selected_regions)]["Zone"].dropna().unique().tolist())
+
+    with st.sidebar.expander("Select Zones"):
+        all_zones_selected = st.checkbox("All Zones", value=True, key="all_zones")
+        selected_zones = []
+        if not all_zones_selected:
+            selected_zones = [zone for zone in available_zones if st.checkbox(zone, value=False, key=f"zone_{zone}")]
+        else:
+            selected_zones = available_zones
+        if not selected_zones:
+            selected_zones = available_zones
+
+    selected_antigen = st.sidebar.selectbox("Select Antigen", available_antigens, index=0)
+
+    # --- Filtering ---
+    filtered_df = df[(df["Period"] == selected_period)].copy()
+    if selected_regions:
+        filtered_df = filtered_df[filtered_df["Region"].isin(selected_regions)]
+    if selected_zones:
+        filtered_df = filtered_df[filtered_df["Zone"].isin(selected_zones)]
+    if selected_antigen:
+        filtered_df = filtered_df[filtered_df["Antigen"] == selected_antigen]
+
+    if filtered_df.empty:
+        st.warning("⚠️ No data found for the selected filters. Please adjust your selections.")
+        st.stop()
+
+    # --- Displaying Summary Metrics Horizontally with new styling ---
+    total_distributed = filtered_df["Distributed"].sum()
+    total_administered = filtered_df["Administered"].sum()
+    overall_utilization_rate = round(
+        (total_administered / total_distributed * 100) if total_distributed > 0 else 0, 0
+    )
+
+    st.markdown("---")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Total Vaccines Distributed</div><div class="custom-metric-value">{total_distributed:,.0f}</div></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Total Vaccines Administered</div><div class="custom-metric-value">{total_administered:,.0f}</div></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Overall Utilization Rate</div><div class="custom-metric-value">{overall_utilization_rate:.0f}%</div></div>', unsafe_allow_html=True)
+    st.markdown("---")
+
+    # --- Displaying Woreda Counts by Utilization Category with new styling ---
+    st.subheader("Woreda Counts by Utilization Category")
+    col_table, col_pie = st.columns([1, 1])
+    with col_table:
+        category_counts = filtered_df["Utilization Category"].value_counts().reset_index()
+        category_counts.columns = ["Woreda Category", "Total Counts"]
+        total_woredas = category_counts["Total Counts"].sum()
+        category_counts["Percentages"] = (category_counts["Total Counts"] / total_woredas * 100).round(0)
+        category_counts = category_counts[["Woreda Category", "Total Counts", "Percentages"]]
+        category_counts.insert(0, "S/N", range(1, len(category_counts) + 1))
+        
+        total_row = pd.DataFrame({
+            "S/N": [len(category_counts) + 1],
+            "Woreda Category": ["Total"],
+            "Total Counts": [total_woredas],
+            "Percentages": [100]
+        })
+        category_counts = pd.concat([category_counts, total_row], ignore_index=True)
+        
+        def generate_html_table(df):
+            html = '<div class="custom-table-container"><table class="custom-table">'
+            html += '<thead><tr>'
+            for col in df.columns:
+                html += f'<th>{col}</th>'
+            html += '</tr></thead>'
+            html += '<tbody>'
+            for index, row in df.iterrows():
+                row_class = 'total-row' if row['Woreda Category'] == 'Total' else ''
+                html += f'<tr class="{row_class}">'
+                for col in df.columns:
+                    value = f"{row[col]:.0f}%" if col == "Percentages" else row[col]
+                    html += f'<td>{value}</td>'
+                html += '</tr>'
+            html += '</tbody></table></div>'
+            return html
+
+        st.markdown(generate_html_table(category_counts), unsafe_allow_html=True)
+        
+    with col_pie:
+        category_counts_pie = filtered_df["Utilization Category"].value_counts().reset_index()
+        category_counts_pie.columns = ["Category", "Count"]
+        pie_fig = px.pie(
+            category_counts_pie,
+            values="Count",
+            names="Category",
+            title="",
+            hole=0.4,
+            color="Category",
+            color_discrete_map={"Acceptable": "green", "Unacceptable": "blue", "Low Utilization": "red"},
+        )
+        pie_fig.update_traces(
+            textfont=dict(color="white"),
+            textposition='inside',
+            insidetextfont_color='white'
+        )
+        pie_fig.update_layout(
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            title="",
+            font=dict(color='black')
+        )
+        st.plotly_chart(pie_fig, use_container_width=True)
+
+    st.markdown("---")
+
+    if len(selected_regions) == len(available_regions):
+        groupby_col = "Region"
+    else:
+        groupby_col = "Zone"
+
+    stacked_bar_data = filtered_df.groupby([groupby_col, "Utilization Category"]).size().reset_index(name='Count')
+    total_by_group = stacked_bar_data.groupby(groupby_col)["Count"].sum().reset_index(name='Total')
+    stacked_bar_data = stacked_bar_data.merge(total_by_group, on=groupby_col)
+    stacked_bar_data["Percentage"] = (stacked_bar_data["Count"] / stacked_bar_data["Total"] * 100).round(0)
+
+    color_map = {
+        "Acceptable": "green",
+        "Unacceptable": "blue",
+        "Low Utilization": "red"
+    }
+
+    st.subheader(f"Utilization Breakdown by {'Region' if len(selected_regions) == len(available_regions) else 'Zone'} ({selected_antigen})")
+    bar_fig = go.Figure()
     
-    unique_to_map = df_to_map[key_col_to_map].dropna().unique()
-    unique_target = df_target[key_col_target].dropna().unique()
+    categories = ["Acceptable", "Low Utilization", "Unacceptable"]
     
-    match_map = {}
-    unmatched_items = []
-
-    # Ensure the columns are string type for comparison
-    unique_to_map = [str(item) for item in unique_to_map]
-    unique_target = [str(item) for item in unique_target]
-
-    with st.spinner("Processing fuzzy matches..."):
-        for item_to_map in unique_to_map:
-            best_match = None
-            highest_ratio = 0
-            
-            # Find the best match in the target list
-            for item_target in unique_target:
-                # Use SequenceMatcher to calculate similarity ratio
-                ratio = SequenceMatcher(None, item_to_map, item_target).ratio() * 100
-                
-                if ratio > highest_ratio:
-                    highest_ratio = ratio
-                    best_match = item_target
-            
-            # If the best match exceeds the threshold, add it to the map
-            if highest_ratio >= threshold:
-                match_map[item_to_map] = best_match
-            else:
-                unmatched_items.append(item_to_map)
-                
-    st.success(f"Fuzzy matching complete for '{key_col_to_map}'. Matches found: {len(match_map)}, unmatched: {len(unmatched_items)}.")
-    
-    return match_map, unmatched_items
-
-# --- File Uploaders ---
-st.subheader("1. Upload Your Datasets")
-distributed_file = st.file_uploader(
-    "Upload the 'Distributed' Data File (CSV or Excel)",
-    type=["csv", "xlsx"],
-    key="distributed_uploader"
-)
-administered_file = st.file_uploader(
-    "Upload the 'Administered' Data File (CSV or Excel)",
-    type=["csv", "xlsx"],
-    key="administered_uploader"
-)
-
-# --- Merging Logic ---
-if distributed_file and administered_file:
-    try:
-        # Read the files into pandas DataFrames
-        @st.cache_data
-        def load_data(uploaded_file):
-            """Loads data from a CSV or Excel file."""
-            if uploaded_file.name.endswith(".csv"):
-                return pd.read_csv(uploaded_file)
-            else:
-                return pd.read_excel(uploaded_file)
-
-        df_dist = load_data(distributed_file)
-        df_admin = load_data(administered_file)
-
-        st.success("✅ Files uploaded successfully! Now, let's configure the merging.")
-
-        # --- Column Mapping for Merging ---
-        st.subheader("2. Map Geographic and Period Columns")
-        st.info("These columns will be used as the unique key to merge the two datasets.")
-
-        # Create a list of all columns to filter from
-        dist_all_cols = list(df_dist.columns)
-        admin_all_cols = list(df_admin.columns)
+    for category in categories:
+        filtered_data = stacked_bar_data[stacked_bar_data["Utilization Category"] == category]
+        bar_fig.add_trace(go.Bar(
+            x=filtered_data[groupby_col],
+            y=filtered_data["Percentage"],
+            name=category,
+            marker_color=color_map[category],
+            text=filtered_data["Percentage"],
+            textposition='inside',
+            insidetextanchor='middle',
+            texttemplate='%{y:.0f}%',
+            hovertemplate=f"<b>%{{x}}</b><br>{category}: %{{y:.0f}}%<br>District Count: %{{customdata}}<extra></extra>",
+            customdata=filtered_data['Count']
+        ))
         
-        # Determine the initial default selections
-        dist_geog_cols = [col for col in dist_all_cols if any(keyword in col.lower() for keyword in ['region', 'zone', 'woreda', 'city'])]
-        dist_period_cols = [col for col in dist_all_cols if any(keyword in col.lower() for keyword in ['period', 'month', 'year', 'date'])]
-        dist_vacc_cols = [col for col in dist_all_cols if col not in dist_geog_cols + dist_period_cols]
+    bar_fig.update_layout(
+        barmode="stack",
+        yaxis=dict(
+            title="Percentage (%)",
+            range=[0, 100],
+            tickformat=".0f"
+        ),
+        xaxis=dict(
+            title=groupby_col,
+            tickangle=-45
+        ),
+        title=f"100% Stacked Utilization by {'Region' if len(selected_regions) == len(available_regions) else 'Zone'} - {selected_antigen} ({selected_period})",
+        legend_title_text="Utilization Category",
+        bargap=0.2,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    st.plotly_chart(bar_fig, use_container_width=True)
 
-        admin_geog_cols = [col for col in admin_all_cols if any(keyword in col.lower() for keyword in ['region', 'zone', 'woreda', 'city'])]
-        admin_period_cols = [col for col in admin_all_cols if any(keyword in col.lower() for keyword in ['period', 'month', 'year', 'date'])]
-        admin_vacc_cols = [col for col in admin_all_cols if col not in admin_geog_cols + admin_period_cols]
-        
-        col_dist, col_admin = st.columns(2)
+    st.markdown("---")
+    with st.expander("📋 Show Woreda-Level Data"):
+        st.dataframe(filtered_df[[
+            "Region", "Zone", "Woreda", "Antigen", "Distributed", "Administered", "Utilization Rate", "Utilization Category"
+        ]].sort_values(by="Utilization Rate", ascending=False).reset_index(drop=True))
 
-        with col_dist:
-            st.markdown("**Distributed Data**")
-            
-            # Use filtered lists for each dropdown
-            region_col_dist = st.selectbox("Select Region Column", dist_geog_cols, key="region_dist")
-            
-            # Remove the selected Region column from the options for Zone
-            dist_zone_options = [col for col in dist_geog_cols if col != region_col_dist]
-            zone_col_dist = st.selectbox("Select Zone Column", dist_zone_options, key="zone_dist")
-            
-            # Remove the selected Region and Zone columns from the options for Woreda
-            dist_woreda_options = [col for col in dist_geog_cols if col not in [region_col_dist, zone_col_dist]]
-            woreda_col_dist = st.selectbox("Select Woreda Column", dist_woreda_options, key="woreda_dist")
-
-            period_col_dist = st.selectbox("Select Period Column", dist_period_cols, key="period_dist")
-
-        with col_admin:
-            st.markdown("**Administered Data**")
-            
-            region_col_admin = st.selectbox("Select Region Column", admin_geog_cols, key="region_admin")
-            
-            admin_zone_options = [col for col in admin_geog_cols if col != region_col_admin]
-            zone_col_admin = st.selectbox("Select Zone Column", admin_zone_options, key="zone_admin")
-            
-            admin_woreda_options = [col for col in admin_geog_cols if col not in [region_col_admin, zone_col_admin]]
-            woreda_col_admin = st.selectbox("Select Woreda Column", admin_woreda_options, key="woreda_admin")
-            
-            period_col_admin = st.selectbox("Select Period Column", admin_period_cols, key="period_admin")
-            
-        st.markdown("---")
-        st.subheader("2.1. Set Fuzzy Matching Thresholds")
-        st.info("Adjust the similarity threshold for each geographic column to account for spelling differences. A higher value requires a closer match.")
-
-        col_reg_thresh, col_zone_thresh, col_woreda_thresh = st.columns(3)
-        with col_reg_thresh:
-            region_threshold = st.slider("Region Threshold (%)", 0, 100, 90)
-        with col_zone_thresh:
-            zone_threshold = st.slider("Zone Threshold (%)", 0, 100, 85)
-        with col_woreda_thresh:
-            woreda_threshold = st.slider("Woreda Threshold (%)", 0, 100, 80)
-
-
-        st.markdown("---")
-        st.subheader("3. Select Vaccine Count Columns")
-        st.info("Select all columns that represent vaccine counts from each dataset.")
-        
-        # The key columns that have been selected
-        excluded_dist_cols = [region_col_dist, zone_col_dist, woreda_col_dist, period_col_dist]
-        excluded_admin_cols = [region_col_admin, zone_col_admin, woreda_col_admin, period_col_admin]
-        
-        # Filter the column lists for the multiselect boxes, ensuring key columns are excluded
-        dist_vaccine_options = [col for col in df_dist.columns if col not in excluded_dist_cols]
-        admin_vaccine_options = [col for col in df_admin.columns if col not in excluded_admin_cols]
-        
-        col_dist_vacc, col_admin_vacc = st.columns(2)
-        with col_dist_vacc:
-            distrib_cols = st.multiselect("Select Distributed Vaccine Columns", dist_vaccine_options, key="distrib_cols")
-
-        with col_admin_vacc:
-            admin_cols = st.multiselect("Select Administered Vaccine Columns", admin_vaccine_options, key="admin_cols")
-
-        # --- Button to Trigger Merging ---
-        if st.button("Merge Datasets"):
-            try:
-                # Add validation to prevent selecting the same column as a key and a vaccine count
-                if not distrib_cols or not admin_cols:
-                    st.warning("Please select at least one vaccine count column from each dataset.")
-                    st.stop()
-
-                with st.spinner("Merging and processing data..."):
-                    # Create mapping dictionaries for geographic and period columns
-                    dist_rename_map = {
-                        region_col_dist: "Region",
-                        zone_col_dist: "Zone",
-                        woreda_col_dist: "Woreda",
-                        period_col_dist: "Period"
-                    }
-                    admin_rename_map = {
-                        region_col_admin: "Region",
-                        zone_col_admin: "Zone",
-                        woreda_col_admin: "Woreda",
-                        period_col_admin: "Period"
-                    }
-                    
-                    # Create clean dataframes with standardized column names
-                    df_dist_clean = df_dist[list(dist_rename_map.keys())].rename(columns=dist_rename_map)
-                    df_admin_clean = df_admin[list(admin_rename_map.keys())].rename(columns=admin_rename_map)
-                    
-                    # Add vaccine count columns
-                    df_dist_clean = df_dist_clean.assign(**{col: df_dist[col] for col in distrib_cols})
-                    df_admin_clean = df_admin_clean.assign(**{col: df_admin[col] for col in admin_cols})
-                    
-                    # Keep a copy of the original Woreda column for comparison after mapping
-                    df_admin_clean['Original_Woreda'] = df_admin_clean['Woreda']
-
-                    # Apply fuzzy matching to the geographic columns
-                    region_map, _ = fuzzy_match_and_map(df_admin_clean, df_dist_clean, "Region", "Region", region_threshold)
-                    zone_map, _ = fuzzy_match_and_map(df_admin_clean, df_dist_clean, "Zone", "Zone", zone_threshold)
-                    woreda_map, unmatched_woredas_list = fuzzy_match_and_map(df_admin_clean, df_dist_clean, "Woreda", "Woreda", woreda_threshold)
-                    
-                    # Identify unmatched Woredas from the administered data
-                    unmatched_woredas_df = df_admin_clean[df_admin_clean['Woreda'].isin(unmatched_woredas_list)].reset_index(drop=True)
-                    
-                    # Apply the maps to the administered dataframe before merging
-                    df_admin_clean["Region"] = df_admin_clean["Region"].map(region_map).fillna(df_admin_clean["Region"])
-                    df_admin_clean["Zone"] = df_admin_clean["Zone"].map(zone_map).fillna(df_admin_clean["Zone"])
-                    df_admin_clean["Woreda"] = df_admin_clean["Woreda"].map(woreda_map).fillna(df_admin_clean["Woreda"])
-
-                    # Merge the dataframes on the common columns
-                    merged_df = pd.merge(
-                        df_dist_clean, 
-                        df_admin_clean.drop(columns=['Original_Woreda']), 
-                        on=["Period", "Region", "Zone", "Woreda"],
-                        how="outer"
-                    )
-
-                    # Now, combine the vaccine columns.
-                    for col in distrib_cols:
-                        if col in merged_df.columns:
-                            merged_df[col] = pd.to_numeric(merged_df[col], errors='coerce').fillna(0)
-                        else:
-                            merged_df[col] = pd.to_numeric(df_dist_clean[col], errors='coerce').fillna(0)
-                    for col in admin_cols:
-                        if col in merged_df.columns:
-                            merged_df[col] = pd.to_numeric(merged_df[col], errors='coerce').fillna(0)
-                        else:
-                            merged_df[col] = pd.to_numeric(df_admin_clean[col], errors='coerce').fillna(0)
-                        
-                    # Store the merged dataframe in session state
-                    st.session_state["immunization_data"] = merged_df
-
-                st.success("🎉 Data merged successfully! You can now navigate to the dashboard.")
-                
-                # Show a preview of the merged data
-                st.subheader("Preview of Merged Data")
-                st.dataframe(merged_df.head())
-                st.write(f"Final merged dataset has {merged_df.shape[0]} rows and {merged_df.shape[1]} columns.")
-                
-                # Display unmatched woredas if any exist
-                if not unmatched_woredas_df.empty:
-                    st.markdown("---")
-                    st.subheader("⚠️ Unmatched Woredas Found")
-                    st.warning(f"There were {len(unmatched_woredas_df['Woreda'].unique())} Woredas in the Administered dataset that did not find a match above the {woreda_threshold}% threshold.")
-                    with st.expander("Show Unmatched Woredas"):
-                        st.dataframe(unmatched_woredas_df[['Woreda']].drop_duplicates())
-                        
-                        # Create a download button for the unmatched data
-                        csv_data = unmatched_woredas_df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="Download Unmatched Woredas as CSV",
-                            data=csv_data,
-                            file_name='unmatched_woredas.csv',
-                            mime='text/csv'
-                        )
-                else:
-                    st.success("✅ All Woredas were matched successfully!")
-            
-            except Exception as e:
-                st.error(f"An error occurred during merging: {e}")
-
-    except Exception as e:
-        st.error(f"Error loading the files. Please ensure they are valid CSV or Excel formats. Error: {e}")
-
-else:
-    st.info("Please upload both data files to begin.")
+elif authentication_status == False:
+    st.error('Username/password is incorrect')
+elif authentication_status == None:
+    st.warning('Please enter your username and password')
