@@ -3,15 +3,85 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+# --- Custom CSS for improved styling ---
+st.markdown("""
+<style>
+/* Overall page layout and styling */
+.stApp {
+    padding-top: 1rem;
+    background-color: #F0F2F6; /* Light gray background for better visibility */
+}
+
+/* Header styling - now with reduced font size */
+.main-header-container {
+    background-color: #004643;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 0.25rem; /* Reduced from 0.5rem to 0.25rem for more compact layout */
+}
+
+.main-header-container h1 {
+    color: white;
+    margin: 0;
+    text-align: center;
+    font-size: 1.5rem; /* Reduced from 2.5rem to 1.5rem */
+}
+
+/* Custom metric styling, using title's color theme */
+.custom-metric-box {
+    background-color: #004643;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    margin-bottom: 1rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.custom-metric-label {
+    font-size: 1rem; /* Reduced size */
+    font-weight: bold;
+    color: white;
+    margin-bottom: 0.25rem;
+}
+
+.custom-metric-value {
+    font-size: 1.5rem; /* Reduced size */
+    font-weight: bold;
+    color: white;
+}
+
+/* Spacing and layout for Streamlit's native components */
+.st-emotion-cache-1kyx5v0 {
+    gap: 0.5rem;
+}
+
+.st-emotion-cache-1f19s7 {
+    padding-top: 0;
+}
+
+/* Custom styling for text content */
+.stMarkdown p {
+    font-size: 1.1rem;
+    color: #333;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(
     page_title="Utilization Dashboard", 
     layout="wide",
     page_icon="💉"
 )
 
-# The custom CSS for the dark theme has been removed to revert to the default Streamlit styling.
-
-st.title("📊 Vaccine Utilization Dashboard")
+# Custom styled title at the top, now with the smaller font
+st.markdown(
+    f"""
+    <div class="main-header-container">
+        <h1>📊 Vaccine Utilization Dashboard</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # --- Correcting the No Dataset Found error with a dummy dataset ---
 if "immunization_data" not in st.session_state:
@@ -35,16 +105,15 @@ if "immunization_data" not in st.session_state:
     }
     st.session_state["immunization_data"] = pd.DataFrame(dummy_data)
 
-
 # --- Threshold configuration for each vaccine ---
 VACCINE_THRESHOLDS = {
     "BCG": {
         "unacceptable": 100,  # >100%
-        "acceptable": 50,     # >50% to 100%
+        "acceptable": 50,      # >50% to 100%
     },
     "IPV": {
         "unacceptable": 100,  # >100%
-        "acceptable": 90,     # >90% to 100%
+        "acceptable": 90,      # >90% to 100%
     },
     "Measles": {
         "unacceptable": 100,
@@ -141,29 +210,49 @@ df = prepare_data(st.session_state["immunization_data"].copy())
 st.sidebar.header("🧪 Filter Data")
 
 available_periods = sorted(df["Period"].unique().tolist(), reverse=True)
-available_regions = ["All"] + sorted(df["Region"].dropna().unique().tolist())
+available_regions = sorted(df["Region"].dropna().unique().tolist())
 available_antigens = sorted(df["Antigen"].dropna().unique().tolist())
 
 selected_period = st.sidebar.selectbox("Select Period", available_periods)
-selected_region = st.sidebar.selectbox("Select Region", available_regions, index=0)
 
-# Filter zones based on the selected region
-if selected_region == "All":
-    available_zones = ["All"] + sorted(df["Zone"].dropna().unique().tolist())
-else:
-    available_zones = ["All"] + sorted(df[df["Region"] == selected_region]["Zone"].dropna().unique().tolist())
-    
-selected_zone = st.sidebar.selectbox("Select Zone", available_zones, index=0)
+# Multi-select checkboxes for regions under an expander
+with st.sidebar.expander("Select Regions"):
+    all_regions_selected = st.checkbox("All Regions", value=True, key="all_regions")
+    selected_regions = []
+    if not all_regions_selected:
+        for region in available_regions:
+            if st.checkbox(region, value=False, key=f"region_{region}"):
+                selected_regions.append(region)
+    else:
+        selected_regions = available_regions  # Select all regions if "All Regions" is checked
+    if not selected_regions:
+        selected_regions = available_regions  # Default to all if none selected
+
+# Filter zones based on selected regions
+available_zones = sorted(df[df["Region"].isin(selected_regions)]["Zone"].dropna().unique().tolist())
+
+# Multi-select checkboxes for zones under an expander
+with st.sidebar.expander("Select Zones"):
+    all_zones_selected = st.checkbox("All Zones", value=True, key="all_zones")
+    selected_zones = []
+    if not all_zones_selected:
+        for zone in available_zones:
+            if st.checkbox(zone, value=False, key=f"zone_{zone}"):
+                selected_zones.append(zone)
+    else:
+        selected_zones = available_zones  # Select all zones if "All Zones" is checked
+    if not selected_zones:
+        selected_zones = available_zones  # Default to all if none selected
 
 selected_antigen = st.sidebar.selectbox("Select Antigen", available_antigens, index=0)
 
 # --- Filtering ---
 filtered_df = df[(df["Period"] == selected_period)].copy()
 
-if selected_region != "All":
-    filtered_df = filtered_df[filtered_df["Region"] == selected_region]
-if selected_zone != "All":
-    filtered_df = filtered_df[filtered_df["Zone"] == selected_zone]
+if selected_regions:
+    filtered_df = filtered_df[filtered_df["Region"].isin(selected_regions)]
+if selected_zones:
+    filtered_df = filtered_df[filtered_df["Zone"].isin(selected_zones)]
 if selected_antigen:
     filtered_df = filtered_df[filtered_df["Antigen"] == selected_antigen]
 
@@ -171,7 +260,7 @@ if filtered_df.empty:
     st.warning("⚠️ No data found for the selected filters. Please adjust your selections.")
     st.stop()
 
-# --- Displaying Summary Metrics Horizontally ---
+# --- Displaying Summary Metrics Horizontally with new styling ---
 total_distributed = filtered_df["Distributed"].sum()
 total_administered = filtered_df["Administered"].sum()
 overall_utilization_rate = round(
@@ -181,14 +270,14 @@ overall_utilization_rate = round(
 st.markdown("---")
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(label="Total Vaccines Distributed", value=f"{total_distributed:,.0f}")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Total Vaccines Distributed</div><div class="custom-metric-value">{total_distributed:,.0f}</div></div>', unsafe_allow_html=True)
 with col2:
-    st.metric(label="Total Vaccines Administered", value=f"{total_administered:,.0f}")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Total Vaccines Administered</div><div class="custom-metric-value">{total_administered:,.0f}</div></div>', unsafe_allow_html=True)
 with col3:
-    st.metric(label="Overall Utilization Rate", value=f"{overall_utilization_rate:.0f}%")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Overall Utilization Rate</div><div class="custom-metric-value">{overall_utilization_rate:.0f}%</div></div>', unsafe_allow_html=True)
 st.markdown("---")
 
-# --- Displaying Woreda Counts by Category ---
+# --- Displaying Woreda Counts by Category with new styling ---
 total_woredas = len(filtered_df["Woreda"].unique())
 category_counts = filtered_df["Utilization Category"].value_counts()
 
@@ -196,15 +285,14 @@ st.subheader("Woreda Counts by Utilization Category")
 col_woredas1, col_woredas2, col_woredas3, col_woredas4 = st.columns(4)
 
 with col_woredas1:
-    st.metric(label="Total Woredas", value=f"{total_woredas:,.0f}")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Total Woredas</div><div class="custom-metric-value">{total_woredas:,.0f}</div></div>', unsafe_allow_html=True)
 with col_woredas2:
-    st.metric(label="Acceptable", value=f"{category_counts.get('Acceptable', 0):,.0f}")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Acceptable</div><div class="custom-metric-value">{category_counts.get("Acceptable", 0):,.0f}</div></div>', unsafe_allow_html=True)
 with col_woredas3:
-    st.metric(label="Unacceptable", value=f"{category_counts.get('Unacceptable', 0):,.0f}")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Unacceptable</div><div class="custom-metric-value">{category_counts.get("Unacceptable", 0):,.0f}</div></div>', unsafe_allow_html=True)
 with col_woredas4:
-    st.metric(label="Low Utilization", value=f"{category_counts.get('Low Utilization', 0):,.0f}")
+    st.markdown(f'<div class="custom-metric-box"><div class="custom-metric-label">Low Utilization</div><div class="custom-metric-value">{category_counts.get("Low Utilization", 0):,.0f}</div></div>', unsafe_allow_html=True)
 st.markdown("---")
-
 
 # --- Summary and Visualization Data Preparation ---
 # Data for the pie chart
@@ -212,7 +300,7 @@ category_counts_pie = filtered_df["Utilization Category"].value_counts().reset_i
 category_counts_pie.columns = ["Category", "Count"]
 
 # Data for the 100% stacked bar chart, dynamically grouped by Region or Zone
-if selected_region == "All":
+if len(selected_regions) == len(available_regions):
     groupby_col = "Region"
 else:
     groupby_col = "Zone"
@@ -236,72 +324,79 @@ color_map = {
     "Low Utilization": "red"
 }
 
-# Adjust column widths for better layout
-col_chart1, col_chart2 = st.columns([2, 1])
+# --- Charts stacked vertically, full-width ---
+st.subheader("Overall Utilization Breakdown")
+pie_fig = px.pie(
+    category_counts_pie,
+    values="Count",
+    names="Category",
+    title="", # Removed the subtitle as requested
+    hole=0.4,
+    color="Category",
+    color_discrete_map=color_map,
+)
+pie_fig.update_traces(
+    textfont=dict(color="white"), # Updated font color for better visibility
+    textposition='inside', # Ensure text is inside for better readability
+    insidetextfont_color='white'
+)
+pie_fig.update_layout(
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    # Explicitly setting title to an empty string to remove the "Undefined" title.
+    title="", 
+    font=dict(color='black')
+)
+st.plotly_chart(pie_fig, use_container_width=True)
 
-with col_chart1:
-    st.subheader(f"Utilization Breakdown by {'Region' if selected_region == 'All' else 'Zone'} ({selected_antigen})")
-    
-    # Corrected approach using plotly.graph_objects for explicit stacking
-    bar_fig = go.Figure()
-    
-    # Define the order of categories for stacking
-    categories = ["Acceptable", "Low Utilization", "Unacceptable"]
-    
-    for category in categories:
-        filtered_data = stacked_bar_data[stacked_bar_data["Utilization Category"] == category]
-        bar_fig.add_trace(go.Bar(
-            x=filtered_data[groupby_col],
-            y=filtered_data["Percentage"],
-            name=category,
-            marker_color=color_map[category],
-            text=filtered_data["Percentage"],
-            textposition='inside',
-            insidetextanchor='middle',
-            texttemplate='%{y:.0f}%',
-            hovertemplate=f"<b>%{{x}}</b><br>{category}: %{{y:.0f}}%<br>District Count: %{{customdata}}<extra></extra>",
-            customdata=filtered_data['Count']
-        ))
-    
-    bar_fig.update_layout(
-        barmode="stack",
-        yaxis=dict(
-            title="Percentage (%)",
-            range=[0, 100],
-            tickformat=".0f"
-        ),
-        xaxis=dict(
-            title=groupby_col,
-            tickangle=-45
-        ),
-        title=f"100% Stacked Utilization by {'Region' if selected_region == 'All' else 'Zone'} - {selected_antigen} ({selected_period})",
-        legend_title_text="Utilization Category",
-        bargap=0.2,
-        showlegend=True
-    )
+st.markdown("---")
 
-    st.plotly_chart(bar_fig, use_container_width=True)
-
-with col_chart2:
-    st.subheader("Overall Utilization Breakdown")
-    pie_fig = px.pie(
-        category_counts_pie,
-        values="Count",
-        names="Category",
-        title="Overall Utilization Distribution",
-        hole=0.4,
-        color="Category",
-        color_discrete_map=color_map,
+st.subheader(f"Utilization Breakdown by {'Region' if len(selected_regions) == len(available_regions) else 'Zone'} ({selected_antigen})")
+bar_fig = go.Figure()
+    
+# Define the order of categories for stacking
+categories = ["Acceptable", "Low Utilization", "Unacceptable"]
+    
+for category in categories:
+    filtered_data = stacked_bar_data[stacked_bar_data["Utilization Category"] == category]
+    bar_fig.add_trace(go.Bar(
+        x=filtered_data[groupby_col],
+        y=filtered_data["Percentage"],
+        name=category,
+        marker_color=color_map[category],
+        text=filtered_data["Percentage"],
+        textposition='inside',
+        insidetextanchor='middle',
+        texttemplate='%{y:.0f}%',
+        hovertemplate=f"<b>%{{x}}</b><br>{category}: %{{y:.0f}}%<br>District Count: %{{customdata}}<extra></extra>",
+        customdata=filtered_data['Count']
+    ))
+    
+bar_fig.update_layout(
+    barmode="stack",
+    yaxis=dict(
+        title="Percentage (%)",
+        range=[0, 100],
+        tickformat=".0f"
+    ),
+    xaxis=dict(
+        title=groupby_col,
+        tickangle=-45
+    ),
+    title=f"100% Stacked Utilization by {'Region' if len(selected_regions) == len(available_regions) else 'Zone'} - {selected_antigen} ({selected_period})",
+    legend_title_text="Utilization Category",
+    bargap=0.2,
+    showlegend=True,
+    # Updated legend position and orientation as requested
+    legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.02,
+        xanchor="right",
+        x=1
     )
-    # Reverting chart colors to default
-    pie_fig.update_traces(textfont_color="black") # Assuming black text on white background is readable
-    pie_fig.update_layout(
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        title_font=dict(size=18, color='black'),
-        font=dict(color='black')
-    )
-    st.plotly_chart(pie_fig, use_container_width=True)
+)
+st.plotly_chart(bar_fig, use_container_width=True)
 
 st.markdown("---")
 with st.expander("📋 Show Woreda-Level Data"):
