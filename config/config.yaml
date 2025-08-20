@@ -1,16 +1,14 @@
-import streamlit as st
-import streamlit_authenticator as stauth
-import yaml
-from yaml.loader import SafeLoader
-
-# ---------- Load config.yaml ----------
-with open("config.yaml") as file:
-    config = yaml.load(file, Loader=SafeLoader)
-
-# ---------- Create Authenticator object ----------
-authenticator = stauth.Authenticate(
-    config['credentials'],
-    config['cookie']['name'],
-    config['cookie']['key'],
-    config['cookie']['expiry_days']
-)
+cookie:
+  expiry_days: 30
+  key: some_random_key_do_not_share
+  name: some_cookie_name
+credentials:
+  usernames:
+    jsmith:
+      email: jsmith@example.com
+      name: John Smith
+      password: $2b$12$RjVwZ... # The hashed password you generated
+    cdoe:
+      email: cdoe@example.com
+      name: Cathy Doe
+      password: $2b$12$ZqN9... # Another hashed password
