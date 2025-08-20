@@ -1,106 +1,66 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="📈 Utilization Dashboard", layout="wide")
+# --- Assume data is already loaded or passed via session state ---
+if "immunization_data" not in st.session_state:
+    st.warning("Data not loaded. Please go to the Home page first.")
+    st.stop()
+    
+df = st.session_state["immunization_data"]
 
-st.title("📈 Vaccine Utilization Dashboard")
+st.set_page_config(
+    page_title="Dashboard 2",
+    layout="wide",
+    page_icon="2️⃣"
+)
 
-# ✅ Check if data is uploaded
-if "data" not in st.session_state:
-    st.warning("⚠️ Please upload a dataset from the Home page first.")
+# Custom header for this page
+st.markdown("""
+<style>
+.main-header-container h1 {
+    color: white;
+    font-size: 1.5rem;
+    text-align: center;
+}
+</style>
+<div class="main-header-container" style="background-color: #33a18a; padding: 1rem; border-radius: 10px; margin-bottom: 0.25rem;">
+    <h1>Second Immunization Dashboard</h1>
+</div>
+""", unsafe_allow_html=True)
+
+# --- Sidebar Filters specific to this dashboard ---
+st.sidebar.header("Dashboard 2 Filters")
+
+available_periods = sorted(df["Period"].unique().tolist(), reverse=True)
+selected_period = st.sidebar.selectbox("Select Period", available_periods)
+
+# Filter for regions to see a more detailed view
+available_regions = sorted(df["Region"].dropna().unique().tolist())
+selected_region = st.sidebar.selectbox("Select Region", available_regions)
+
+# --- Filtering the data ---
+filtered_df = df[(df["Period"] == selected_period) & (df["Region"] == selected_region)].copy()
+
+if filtered_df.empty:
+    st.warning("⚠️ No data found for the selected filters. Please adjust your selections.")
     st.stop()
 
-df = st.session_state["data"]
+# --- Dashboard 2 Content: Example Charts ---
+st.subheader(f"Utilization Rate by Antigen in {selected_region}")
+antigen_utilization = filtered_df.groupby('Antigen').apply(
+    lambda x: (x['Administered'].sum() / x['Distributed'].sum() * 100) if x['Distributed'].sum() > 0 else 0
+).reset_index(name='Utilization Rate')
 
-# ✅ Ensure required columns exist
-required_columns = [
-    "Region", "Zone", "Woreda", "Period",
-    "BCG Distributed", "BCG Administered",
-    "IPV Distributed", "IPV Administered",
-    "Measles Distributed", "Measles Administered",
-    "Penta Distributed", "Penta Administered",
-    "Rota Distributed", "Rota Administered"
-]
+fig = px.line(antigen_utilization,
+              x='Antigen',
+              y='Utilization Rate',
+              markers=True,
+              title=f"Utilization Rate by Antigen in {selected_region} ({selected_period})")
 
-missing = [col for col in required_columns if col not in df.columns]
-if missing:
-    st.error(f"Missing columns: {missing}")
-    st.stop()
+st.plotly_chart(fig, use_container_width=True)
 
-# ✅ Calculate Utilization Rate
-def calculate_utilization(row):
-    total_distributed = sum([
-        row["BCG Distributed"], row["IPV Distributed"],
-        row["Measles Distributed"], row["Penta Distributed"],
-        row["Rota Distributed"]
-    ])
-    total_administered = sum([
-        row["BCG Administered"], row["IPV Administered"],
-        row["Measles Administered"], row["Penta Administered"],
-        row["Rota Administered"]
-    ])
-    if total_distributed == 0:
-        return 0
-    return (total_administered / total_distributed) * 100
-
-df["Utilization Rate (%)"] = df.apply(calculate_utilization, axis=1)
-
-# ✅ Categorize
-def categorize(rate):
-    if rate > 100:
-        return "Unacceptable"
-    elif 80 <= rate <= 100:
-        return "Acceptable"
-    else:
-        return "Low Utilization"
-
-df["Utilization Category"] = df["Utilization Rate (%)"].apply(categorize)
-
-# ✅ Filters
-periods = ["All"] + sorted(df["Period"].dropna().unique())
-regions = ["All"] + sorted(df["Region"].dropna().unique())
-zones = ["All"] + sorted(df["Zone"].dropna().unique())
-
-col1, col2, col3 = st.columns(3)
-selected_period = col1.selectbox("Filter by Period", periods)
-selected_region = col2.selectbox("Filter by Region", regions)
-selected_zone = col3.selectbox("Filter by Zone", zones)
-
-# ✅ Apply filters
-filtered_df = df.copy()
-if selected_period != "All":
-    filtered_df = filtered_df[filtered_df["Period"] == selected_period]
-if selected_region != "All":
-    filtered_df = filtered_df[filtered_df["Region"] == selected_region]
-if selected_zone != "All":
-    filtered_df = filtered_df[filtered_df["Zone"] == selected_zone]
-
-# ✅ Count and Percentage
-category_counts = filtered_df["Utilization Category"].value_counts().reindex(["Unacceptable", "Acceptable", "Low Utilization"], fill_value=0)
-total = category_counts.sum()
-category_percentages = (category_counts / total * 100).round(2)
-
-st.subheader("Woreda Utilization Summary")
-col1, col2 = st.columns(2)
-with col1:
-    st.write("### Count of Woredas")
-    st.dataframe(category_counts.rename("Count"))
-
-with col2:
-    st.write("### Percentage of Woredas")
-    st.dataframe(category_percentages.rename("%"))
-
-# ✅ Bar Chart
-fig1, ax1 = plt.subplots()
-category_counts.plot(kind="bar", color=["blue", "green", "red"], ax=ax1)
-ax1.set_title("Woreda Utilization by Category")
-ax1.set_ylabel("Number of Woredas")
-ax1.set_xlabel("Utilization Category")
-st.pyplot(fig1)
-
-# ✅ Pie Chart
-fig2, ax2 = plt.subplots()
-ax2.pie(category_percentages, labels=category_percentages.index, autopct="%1.1f%%", colors=["blue", "green", "red"], startangle=90)
-ax2.set_title("Utilization Category Distribution")
-st.pyplot(fig2)
+# --- Other visualizations or tables for this dashboard ---
+st.subheader(f"Woreda-level Details for {selected_region}")
+st.dataframe(filtered_df[['Woreda', 'Antigen', 'Distributed', 'Administered', 'Utilization Rate']].sort_values(by="Utilization Rate", ascending=False))
