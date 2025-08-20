@@ -1,9 +1,76 @@
 # File: C:\Users\Sagni\Desktop\immunization_app\Home.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 from difflib import SequenceMatcher
+
+# --- Custom CSS for improved styling (copied from Dashboard.py) ---
+st.markdown("""
+<style>
+/* Overall page layout and styling */
+.stApp {
+    padding-top: 1rem;
+    background-color: #F0F2F6; /* Light gray background for better visibility */
+}
+
+/* Header styling */
+.main-header-container {
+    background-color: #004643;
+    padding: 1rem;
+    border-radius: 10px;
+    margin-bottom: 2rem;
+}
+
+.main-header-container h1 {
+    color: white;
+    margin: 0;
+    text-align: center;
+    font-size: 2.5rem;
+}
+
+/* Metric styling (not used here but kept for consistency) */
+.metric-container {
+    background-color: #E6F7FF;
+    border: 1px solid #cceeff;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+.metric-title {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #004643;
+    margin-bottom: 0.5rem;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #007bff;
+}
+
+/* Spacing and layout for metrics */
+.st-emotion-cache-1kyx5v0 {
+    gap: 0.5rem;
+}
+
+.st-emotion-cache-1f19s7 {
+    padding-top: 0;
+}
+
+/* Custom styling for the file uploader and text */
+.stMarkdown p {
+    font-size: 1.1rem;
+    color: #333;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Set the page configuration for the main page
 st.set_page_config(
@@ -13,7 +80,16 @@ st.set_page_config(
     page_icon="🏠"
 )
 
-st.title("🏠 Data Triangulation and Preparation App")
+# Custom styled title at the top
+st.markdown(
+    f"""
+    <div class="main-header-container">
+        <h1>🏠 Data Triangulation and Preparation App</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.markdown("This application helps you combine two separate datasets (Distributed and Administered) into a single, clean file for analysis.")
 st.markdown("---")
 
@@ -232,9 +308,9 @@ if distributed_file and administered_file:
                         else:
                             merged_df[col] = pd.to_numeric(df_dist_clean[col], errors='coerce').fillna(0)
                     for col in admin_cols:
-                         if col in merged_df.columns:
+                        if col in merged_df.columns:
                             merged_df[col] = pd.to_numeric(merged_df[col], errors='coerce').fillna(0)
-                         else:
+                        else:
                             merged_df[col] = pd.to_numeric(df_admin_clean[col], errors='coerce').fillna(0)
                         
                     # Store the merged dataframe in session state
